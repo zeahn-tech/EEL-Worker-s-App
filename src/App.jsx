@@ -11,7 +11,6 @@ import { useAuth } from './context/AuthContext';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import {
   Download,
-  Settings,
   ChevronDown,
   X,
   Users,
@@ -119,7 +118,7 @@ const AppHeader = ({ onToggleSidebar, sidebarOpen, onOpenAdmin, installPrompt, o
         {isAdmin && (
           <button className="btn btn-secondary amber-border" onClick={onOpenAdmin}
             style={{ fontSize: 12, padding: '6px 10px', minHeight: 34, color: 'var(--amber-primary)' }}>
-            <Settings size={15} />
+            <SettingsIcon size={15} />
             <span className="mobile-hide">Admin</span>
           </button>
         )}
