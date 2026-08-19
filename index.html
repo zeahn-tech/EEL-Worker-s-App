@@ -1,17 +1,4 @@
 <!DOCTYPE html>
-<!--
-  ⚠️ READ ME: this file is a STALE, MANUALLY-COMMITTED build artifact from before
-  several rounds of fixes (auth, mobile layout, install banner, etc.). It hardcodes
-  a reference to an old JS bundle and will keep showing old/broken behavior if your
-  GitHub Pages site is still serving straight from this file.
-
-  Fix: this repo now includes .github/workflows/deploy.yml, which builds fresh from
-  the current source and deploys automatically on every push. One-time setup:
-  repo Settings → Pages → Build and deployment → Source → "GitHub Actions".
-  After that, this file (and the /dist folder next to it) are no longer used for
-  deployment at all — GitHub Pages serves the freshly-built artifact instead.
-  See README.md → "How to Deploy on GitHub Pages" for details.
--->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -37,17 +24,34 @@
 
     <!-- Leaflet CSS for Location Maps -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <script type="module" crossorigin src="./dist/assets/index--Vegji5r.js"></script>
-    <link rel="stylesheet" crossorigin href="./dist/assets/index-B5OHcTkE.css">
   </head>
   <body>
     <div id="root"></div>
+    <!-- This MUST point at the real source entry — Vite reads this file as its build
+         entry point and crawls the module graph starting here. Pointing this at a
+         prebuilt dist/ file (as a previous version of this file did) makes Vite bundle
+         that stale prebuilt file instead of the actual current source — silently, with
+         no build error — which is why past builds kept shipping old code even after a
+         successful, green CI run. -->
+    <script type="module" src="/src/main.jsx"></script>
     <script>
       // Register PWA Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('EEL PWA ServiceWorker registered with scope:', reg.scope))
+            .then(reg => {
+              console.log('EEL PWA ServiceWorker registered with scope:', reg.scope);
+              // If a new service worker takes control of an already-open tab (i.e. this
+              // isn't the very first install), reload once so the page's already-loaded
+              // JS/CSS is replaced with the fresh version instead of silently sitting
+              // stale until the next manual hard-refresh.
+              let hasReloaded = false;
+              navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (hasReloaded) return;
+                hasReloaded = true;
+                window.location.reload();
+              });
+            })
             .catch(err => console.error('EEL PWA ServiceWorker registration failed:', err));
         });
       }
