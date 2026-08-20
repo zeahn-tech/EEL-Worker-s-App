@@ -95,7 +95,7 @@ export const Login = () => {
             {settings.companyName || 'Elite Express Logistics Liberia'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, textAlign: 'center' }}>
-            Sign in to your dispatch account
+            Sign in to your account
           </div>
         </div>
 
@@ -193,7 +193,7 @@ export const Login = () => {
               borderRadius: 'var(--radius-sm)', padding: 10, maxHeight: 160, overflowY: 'auto'
             }}>
               <div style={{ marginBottom: 6, color: 'var(--text-dim)' }}>
-                Demo password for every seed account: <strong style={{ color: 'var(--amber-primary)' }}>Welcome123!</strong>
+                Demo password for every seed account: <strong style={{ color: 'var(--amber-primary)' }}>Welcome</strong>
               </div>
               {users.map(u => (
                 <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
