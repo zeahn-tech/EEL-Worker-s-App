@@ -140,6 +140,107 @@ export const AuthProvider = ({ children }) => {
     return { success: true };
   };
 
+  // Self-service account creation. Always creates a 'Worker'-role account — nobody can
+  // grant themselves Admin by signing up; that stays an explicit Staff Manager action.
+  const signUp = async (name, email, password) => {
+    const emailKey = (email || '').trim().toLowerCase();
+    if (!name?.trim() || !emailKey || !password) {
+      return { success: false, error: 'Fill in your name, email, and password.' };
+    }
+    if (password.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters.' };
+    }
+
+    if (supabaseMode) {
+      const result = await supaAuth.signUpNewAccount({ name: name.trim(), email: emailKey, password });
+      if (!result.success) return result;
+      if (result.needsEmailConfirmation) return { success: true, needsEmailConfirmation: true };
+      setCurrentUser(result.user);
+      supaAuth.fetchAllProfiles().then(setUsers);
+      return { success: true };
+    }
+
+    const latestUsers = localDb.getUsers();
+    if (latestUsers.some(u => u.email.toLowerCase() === emailKey)) {
+      return { success: false, error: 'An account with this email already exists.' };
+    }
+    const newId = `user-${Date.now()}`;
+    const passwordHash = await hashPassword(password, newId);
+    const newUser = {
+      id: newId,
+      name: name.trim(),
+      email: emailKey,
+      role: 'Worker',
+      department: 'Unassigned',
+      status: 'Active',
+      avatar: '',
+      initials: name.trim().split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+      phone: '',
+      online: true,
+      lastSeen: 'Just now',
+      passwordHash
+    };
+    const updatedUsers = [...latestUsers, newUser];
+    setUsers(updatedUsers);
+    localDb.saveUsers(updatedUsers);
+    localDb.startSession(newId);
+    localDb.setCurrentUser(newUser);
+    setCurrentUser(newUser);
+    return { success: true };
+  };
+
+  // Self-service: update your own name / email / avatar.
+  const updateOwnProfile = async ({ name, email, avatar }) => {
+    if (!currentUser) return { success: false, error: 'Not signed in.' };
+    const emailChanged = email && email.toLowerCase() !== currentUser.email.toLowerCase();
+
+    if (supabaseMode) {
+      if (emailChanged) {
+        const emailResult = await supaAuth.updateAuthEmail(email);
+        if (!emailResult.success) return emailResult;
+      }
+      const fieldResult = await supaAuth.updateOwnProfileFields(currentUser.id, { name, email, avatar });
+      if (!fieldResult.success) return fieldResult;
+      const updated = { ...currentUser, name, email, avatar };
+      setCurrentUser(updated);
+      setUsers(prev => prev.map(u => u.id === currentUser.id ? updated : u));
+      return {
+        success: true,
+        emailConfirmationSent: emailChanged // Supabase may require confirming the new address
+      };
+    }
+
+    if (emailChanged) {
+      const latestUsers = localDb.getUsers();
+      if (latestUsers.some(u => u.id !== currentUser.id && u.email.toLowerCase() === email.toLowerCase())) {
+        return { success: false, error: 'An account with this email already exists.' };
+      }
+    }
+    const initials = (name || currentUser.name).split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    const updatedUsers = users.map(u => u.id === currentUser.id ? { ...u, name, email, avatar, initials } : u);
+    setUsers(updatedUsers);
+    localDb.saveUsers(updatedUsers);
+    const updated = updatedUsers.find(u => u.id === currentUser.id);
+    localDb.setCurrentUser(updated);
+    setCurrentUser(updated);
+    return { success: true };
+  };
+
+  // Self-service: upload/replace your own profile photo. Resizing happens client-side
+  // before this is called (see services/imageUtils.js) — this just stores the result.
+  const uploadAvatar = async ({ dataUrl, blob, contentType }) => {
+    if (!currentUser) return { success: false, error: 'Not signed in.' };
+
+    if (supabaseMode) {
+      const result = await supaAuth.uploadAvatarImage(currentUser.id, blob, contentType);
+      if (!result.success) return result;
+      return updateOwnProfile({ name: currentUser.name, email: currentUser.email, avatar: result.url });
+    }
+
+    // Local mode: store the resized image directly as a data URL.
+    return updateOwnProfile({ name: currentUser.name, email: currentUser.email, avatar: dataUrl });
+  };
+
   const logout = async () => {
     if (supabaseMode) {
       await supaAuth.signOut();
@@ -273,8 +374,11 @@ export const AuthProvider = ({ children }) => {
       loading,
       supabaseMode,
       login,
+      signUp,
       logout,
       changeOwnPassword,
+      updateOwnProfile,
+      uploadAvatar,
       resetWorkerPassword,
       addWorker,
       updateWorkerStatus,

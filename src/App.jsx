@@ -7,6 +7,7 @@ import { StaffManager } from './components/Admin/StaffManager';
 import { SystemSettings } from './components/Admin/SystemSettings';
 import { GroupCreator } from './components/Admin/GroupCreator';
 import { Login } from './components/Auth/Login';
+import { ProfileSettings } from './components/Auth/ProfileSettings';
 import { useAuth } from './context/AuthContext';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import {
@@ -19,12 +20,13 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  LogOut
+  LogOut,
+  UserCog
 } from 'lucide-react';
 
 // --- TOP HEADER ---
-const AppHeader = ({ onToggleSidebar, sidebarOpen, onOpenAdmin, installPrompt, onInstallApp, showIosInstallHint }) => {
-  const { currentUser, logout, settings, isAdmin, isSuspended, isBanned } = useAuth();
+const AppHeader = ({ onToggleSidebar, sidebarOpen, onOpenProfile, installPrompt, onInstallApp, showIosInstallHint }) => {
+  const { currentUser, logout, settings, isSuspended, isBanned } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showIosPanel, setShowIosPanel] = useState(false);
 
@@ -116,14 +118,6 @@ const AppHeader = ({ onToggleSidebar, sidebarOpen, onOpenAdmin, installPrompt, o
           </div>
         )}
 
-        {isAdmin && (
-          <button className="btn btn-secondary amber-border" onClick={onOpenAdmin}
-            style={{ fontSize: 12, padding: '6px 10px', minHeight: 34, color: 'var(--amber-primary)' }}>
-            <Settings size={15} />
-            <span className="mobile-hide">Admin</span>
-          </button>
-        )}
-
         {/* User Avatar Switcher */}
         <div style={{ position: 'relative' }}>
           <button
@@ -137,12 +131,15 @@ const AppHeader = ({ onToggleSidebar, sidebarOpen, onOpenAdmin, installPrompt, o
               cursor: 'pointer', color: 'var(--text-main)'
             }}>
             <div style={{
-              width: 30, height: 30, borderRadius: '50%',
+              width: 30, height: 30, borderRadius: '50%', overflow: 'hidden',
               background: isBanned ? '#EF4444' : isSuspended ? '#F59E0B' : 'var(--amber-primary)',
               color: '#0F172A', fontWeight: 700, fontSize: 12,
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
             }}>
-              {currentUser?.initials || '?'}
+              {currentUser?.avatar
+                ? <img src={currentUser.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (currentUser?.initials || '?')
+              }
             </div>
             <span className="mobile-hide" style={{ fontSize: 12, fontWeight: 600, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {currentUser?.name}
@@ -167,6 +164,16 @@ const AppHeader = ({ onToggleSidebar, sidebarOpen, onOpenAdmin, installPrompt, o
                   {currentUser?.role} • {currentUser?.department}
                 </div>
               </div>
+              <button onClick={() => { setShowDropdown(false); onOpenProfile(); }}
+                style={{
+                  width: '100%', padding: '8px 8px', borderRadius: 'var(--radius-sm)',
+                  border: 'none', cursor: 'pointer', textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'transparent', color: 'var(--text-main)', fontSize: 13, fontWeight: 600
+                }}>
+                <UserCog size={15} />
+                Account Settings
+              </button>
               <button onClick={logout}
                 style={{
                   width: '100%', padding: '8px 8px', borderRadius: 'var(--radius-sm)',
@@ -241,6 +248,7 @@ const AppLayout = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [showGroupCreator, setShowGroupCreator] = useState(false);
   const { installPrompt, showIosInstallHint, promptInstall } = useInstallPrompt();
 
@@ -268,13 +276,16 @@ const AppLayout = () => {
     }
   };
 
+  const openAdmin = () => { setShowAdmin(true); setMobileSidebarOpen(false); };
+  const openProfile = () => { setShowProfile(true); setMobileSidebarOpen(false); };
+
   return (
     <div className="app-container">
       {/* ===== FIXED TOP HEADER ===== */}
       <AppHeader
         onToggleSidebar={toggleSidebar}
         sidebarOpen={isMobile ? mobileSidebarOpen : sidebarOpen}
-        onOpenAdmin={() => setShowAdmin(true)}
+        onOpenProfile={openProfile}
         installPrompt={installPrompt}
         onInstallApp={promptInstall}
         showIosInstallHint={showIosInstallHint}
@@ -285,7 +296,11 @@ const AppLayout = () => {
         {/* DESKTOP SIDEBAR (collapsible) */}
         {!isMobile && (
           <div className={`sidebar-panel ${sidebarOpen ? '' : 'collapsed-desktop'}`}>
-            <ChatSidebar onOpenGroupCreator={() => setShowGroupCreator(true)} />
+            <ChatSidebar
+              onOpenGroupCreator={() => setShowGroupCreator(true)}
+              onOpenAdmin={openAdmin}
+              onOpenProfile={openProfile}
+            />
           </div>
         )}
 
@@ -310,6 +325,8 @@ const AppLayout = () => {
               <ChatSidebar
                 onOpenGroupCreator={() => { setShowGroupCreator(true); setMobileSidebarOpen(false); }}
                 onSelectChat={() => setMobileSidebarOpen(false)}
+                onOpenAdmin={openAdmin}
+                onOpenProfile={openProfile}
               />
             </div>
           </>
@@ -323,6 +340,7 @@ const AppLayout = () => {
 
       {/* MODALS */}
       {showAdmin && <AdminModal onClose={() => setShowAdmin(false)} />}
+      {showProfile && <ProfileSettings onClose={() => setShowProfile(false)} />}
       <GroupCreator isOpen={showGroupCreator} onClose={() => setShowGroupCreator(false)} />
     </div>
   );

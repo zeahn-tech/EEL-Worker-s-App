@@ -1,9 +1,9 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
-import { Search, Plus, Hash, User } from 'lucide-react';
+import { Search, Plus, Hash, User, Settings } from 'lucide-react';
 
-export const ChatSidebar = ({ onOpenGroupCreator, onSelectChat }) => {
+export const ChatSidebar = ({ onOpenGroupCreator, onSelectChat, onOpenAdmin, onOpenProfile }) => {
   const { users, currentUser, isAdmin } = useAuth();
   const { groups, activeChat, setActiveChat, searchQuery, setSearchQuery } = useChat();
 
@@ -96,11 +96,16 @@ export const ChatSidebar = ({ onOpenGroupCreator, onSelectChat }) => {
             }}>
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 <div style={{
-                  width: 32, height: 32, borderRadius: '50%',
+                  width: 32, height: 32, borderRadius: '50%', overflow: 'hidden',
                   background: u.status === 'Banned' ? '#EF4444' : u.status === 'Suspended' ? '#F59E0B' : 'var(--bg-tertiary)',
                   color: u.status !== 'Active' ? '#fff' : 'var(--amber-primary)',
                   fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>{u.initials}</div>
+                }}>
+                  {u.avatar
+                    ? <img src={u.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : u.initials
+                  }
+                </div>
                 {u.status === 'Active' && (
                   <div style={{
                     width: 9, height: 9, borderRadius: '50%',
@@ -128,6 +133,51 @@ export const ChatSidebar = ({ onOpenGroupCreator, onSelectChat }) => {
             </button>
           );
         })}
+      </div>
+
+      {/* Sidebar Footer — account + admin settings, moved here to keep the top header clean */}
+      <div style={{
+        flexShrink: 0, padding: '10px', borderTop: '1px solid var(--border-subtle)',
+        display: 'flex', alignItems: 'center', gap: 8
+      }}>
+        <button
+          onClick={onOpenProfile}
+          title="Account Settings"
+          style={{
+            flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8,
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            borderRadius: 'var(--radius-md)', padding: '6px 8px', textAlign: 'left'
+          }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+            background: 'var(--bg-tertiary)', color: 'var(--amber-primary)',
+            fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            {currentUser?.avatar
+              ? <img src={currentUser.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : (currentUser?.initials || '?')
+            }
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {currentUser?.name}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {currentUser?.role}
+            </div>
+          </div>
+        </button>
+
+        {isAdmin && (
+          <button
+            onClick={onOpenAdmin}
+            title="Admin Dashboard"
+            className="btn btn-secondary btn-icon"
+            style={{ flexShrink: 0, color: 'var(--amber-primary)' }}
+          >
+            <Settings size={17} />
+          </button>
+        )}
       </div>
     </div>
   );

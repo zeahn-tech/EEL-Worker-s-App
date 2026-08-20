@@ -1,28 +1,53 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useInstallPrompt } from '../../hooks/useInstallPrompt';
-import { Lock, Mail, Eye, EyeOff, LogIn, AlertCircle, Info, Download, Share } from 'lucide-react';
+import { Lock, Mail, User, Eye, EyeOff, LogIn, UserPlus, AlertCircle, CheckCircle2, Download, Share } from 'lucide-react';
 
 export const Login = () => {
-  const { login, settings, users, supabaseMode } = useAuth();
+  const { login, signUp, settings } = useAuth();
   const { installPrompt, showIosInstallHint, promptInstall } = useInstallPrompt();
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [showDemoHint, setShowDemoHint] = useState(false);
   const [showIosPanel, setShowIosPanel] = useState(false);
+  const [signupSuccessMessage, setSignupSuccessMessage] = useState('');
+
+  const switchMode = (next) => {
+    setMode(next);
+    setError('');
+    setSignupSuccessMessage('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSubmitting(true);
-    const result = await login(email, password);
+
+    if (mode === 'signin') {
+      const result = await login(email, password);
+      setSubmitting(false);
+      if (!result.success) setError(result.error || 'Sign in failed.');
+      return;
+    }
+
+    // Sign up
+    const result = await signUp(name, email, password);
     setSubmitting(false);
     if (!result.success) {
-      setError(result.error || 'Sign in failed.');
+      setError(result.error || 'Could not create account.');
+      return;
     }
+    if (result.needsEmailConfirmation) {
+      setSignupSuccessMessage(`Account created! Check ${email} for a confirmation link before signing in.`);
+      setMode('signin');
+      setPassword('');
+    }
+    // If no confirmation needed, signUp() already logged the person in — AuthGate
+    // will swap straight to the app, nothing else to do here.
   };
 
   return (
@@ -79,7 +104,7 @@ export const Login = () => {
         padding: '32px 28px', boxShadow: 'var(--shadow-lg)'
       }}>
         {/* Brand */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 22 }}>
           <div style={{
             width: 60, height: 60, borderRadius: 14,
             background: 'var(--navy-dark)', border: '2px solid var(--amber-primary)',
@@ -95,14 +120,72 @@ export const Login = () => {
             {settings.companyName || 'Elite Express Logistics Liberia'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, textAlign: 'center' }}>
-            Sign in to your account
+            {mode === 'signin' ? 'Sign in to your dispatch account' : 'Create your dispatch account'}
           </div>
         </div>
 
+        {/* Mode toggle */}
+        <div style={{
+          display: 'flex', background: 'rgba(15,23,42,0.6)', borderRadius: 'var(--radius-md)',
+          padding: 3, marginBottom: 20, border: '1px solid var(--border-subtle)'
+        }}>
+          <button type="button" onClick={() => switchMode('signin')}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+              fontSize: 12, fontWeight: 700, transition: 'all 0.15s ease',
+              background: mode === 'signin' ? 'var(--amber-primary)' : 'transparent',
+              color: mode === 'signin' ? '#0F172A' : 'var(--text-muted)'
+            }}>
+            Sign In
+          </button>
+          <button type="button" onClick={() => switchMode('signup')}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+              fontSize: 12, fontWeight: 700, transition: 'all 0.15s ease',
+              background: mode === 'signup' ? 'var(--amber-primary)' : 'transparent',
+              color: mode === 'signup' ? '#0F172A' : 'var(--text-muted)'
+            }}>
+            Create Account
+          </button>
+        </div>
+
+        {signupSuccessMessage && (
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8,
+            background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)',
+            borderRadius: 'var(--radius-sm)', padding: '8px 10px', marginBottom: 14,
+            fontSize: 12, color: '#6EE7B7'
+          }}>
+            <CheckCircle2 size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>{signupSuccessMessage}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
+          {mode === 'signup' && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                Full Name
+              </label>
+              <div style={{ position: 'relative' }}>
+                <User size={15} color="var(--text-dim)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="text"
+                  className="input-field"
+                  style={{ paddingLeft: 36 }}
+                  placeholder="Your full name"
+                  autoComplete="name"
+                  required
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-              Company Email
+              Email
             </label>
             <div style={{ position: 'relative' }}>
               <Mail size={15} color="var(--text-dim)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
@@ -110,7 +193,7 @@ export const Login = () => {
                 type="email"
                 className="input-field"
                 style={{ paddingLeft: 36 }}
-                placeholder="you@eel-logistics.com"
+                placeholder="you@company.com"
                 autoComplete="username"
                 required
                 value={email}
@@ -129,9 +212,10 @@ export const Login = () => {
                 type={showPassword ? 'text' : 'password'}
                 className="input-field"
                 style={{ paddingLeft: 36, paddingRight: 38 }}
-                placeholder="••••••••"
-                autoComplete="current-password"
+                placeholder={mode === 'signup' ? 'At least 8 characters' : '••••••••'}
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                 required
+                minLength={mode === 'signup' ? 8 : undefined}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
               />
@@ -164,47 +248,30 @@ export const Login = () => {
 
           <button type="submit" className="btn btn-primary" disabled={submitting}
             style={{ width: '100%', minHeight: 42, fontSize: 14 }}>
-            <LogIn size={16} />
-            {submitting ? 'Signing in…' : 'Sign In'}
+            {mode === 'signin' ? <LogIn size={16} /> : <UserPlus size={16} />}
+            {submitting
+              ? (mode === 'signin' ? 'Signing in…' : 'Creating account…')
+              : (mode === 'signin' ? 'Sign In' : 'Create Account')}
           </button>
         </form>
 
-        {/* Demo credentials hint — only relevant when running in local (no Supabase)
-            mode. In Supabase mode these are real accounts, so nothing is surfaced. */}
-        {!supabaseMode && (
-        <div style={{ marginTop: 18, textAlign: 'center' }}>
-          <button
-            type="button"
-            onClick={() => setShowDemoHint(v => !v)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              fontSize: 11, color: 'var(--text-dim)'
-            }}
-          >
-            <Info size={12} />
-            {showDemoHint ? 'Hide demo accounts' : 'This is a demo — show test accounts'}
-          </button>
-
-          {showDemoHint && (
-            <div className="animate-fade-in" style={{
-              marginTop: 10, textAlign: 'left', fontSize: 11, color: 'var(--text-muted)',
-              background: 'rgba(15,23,42,0.6)', border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-sm)', padding: 10, maxHeight: 160, overflowY: 'auto'
-            }}>
-              <div style={{ marginBottom: 6, color: 'var(--text-dim)' }}>
-                Demo password for every seed account: <strong style={{ color: 'var(--amber-primary)' }}>Welcome</strong>
-              </div>
-              {users.map(u => (
-                <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                  <span>{u.name} {u.role === 'Admin' && '👑'}</span>
-                  <span style={{ color: 'var(--text-dim)' }}>{u.email}</span>
-                </div>
-              ))}
-            </div>
+        <div style={{ marginTop: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-dim)' }}>
+          {mode === 'signin' ? (
+            <>Don't have an account?{' '}
+              <button type="button" onClick={() => switchMode('signup')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--amber-primary)', fontWeight: 600, fontSize: 12 }}>
+                Create one
+              </button>
+            </>
+          ) : (
+            <>Already have an account?{' '}
+              <button type="button" onClick={() => switchMode('signin')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--amber-primary)', fontWeight: 600, fontSize: 12 }}>
+                Sign in
+              </button>
+            </>
           )}
         </div>
-        )}
       </div>
     </div>
   );

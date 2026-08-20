@@ -10,10 +10,16 @@
 //  - Row Level Security policies on `profiles` that allow:
 //      - any authenticated user to SELECT all rows (needed for the staff directory /
 //        chat member list)
-//      - a user to UPDATE their own row (password changes touch auth, not this table)
+//      - a newly signed-up user to INSERT their own row where id = auth.uid() (needed
+//        for self-service Sign Up — this runs as that new user, not as an admin)
+//      - a user to UPDATE their own row (self-service name/avatar edits — password and
+//        email changes go through Supabase Auth directly, not this table)
 //      - Admin-role users to UPDATE/DELETE any row (staff management)
 //  - A trigger (or this code's upsert-on-signup) that creates a `profiles` row when a
 //    new auth user is created, defaulting role to 'Worker'.
+//  - A public Storage bucket named `avatars` if you want profile photo uploads, with
+//    a policy allowing authenticated users to upload/update objects under a path
+//    matching their own auth.uid() (e.g. `{uid}/*`) and public read access.
 
 import { getSupabaseClient, getAdminActionClient } from './supabaseClient';
 
@@ -130,6 +136,75 @@ export const createWorkerAccount = async ({ name, email, password, role, departm
   }
 
   return { success: true, user: toAppUser({ id: data.user.id, name, email, role, department, phone, status: 'Active' }) };
+};
+
+// Self-service sign-up: anyone can create their own account. Always defaults to the
+// 'Worker' role — a self-serve path must never be able to grant Admin access; role
+// upgrades stay an explicit Admin action in Staff Manager.
+export const signUpNewAccount = async ({ name, email, password }) => {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) return { success: false, error: mapAuthError(error) };
+  if (!data.user) {
+    return { success: false, error: 'Could not create account — please try again.' };
+  }
+
+  const { error: profileError } = await supabase.from('profiles').upsert({
+    id: data.user.id,
+    name,
+    email,
+    role: 'Worker',
+    department: '',
+    status: 'Active',
+    phone: ''
+  });
+  if (profileError) {
+    return { success: false, error: `Account created, but profile setup failed: ${profileError.message}` };
+  }
+
+  // If your Supabase project requires email confirmation, there's no session yet —
+  // the person needs to click the link in their inbox before they can sign in.
+  const needsEmailConfirmation = !data.session;
+  if (needsEmailConfirmation) return { success: true, needsEmailConfirmation: true };
+
+  const profile = await fetchProfile(data.user.id);
+  return { success: true, needsEmailConfirmation: false, user: profile };
+};
+
+// Self-service: update your own display name / avatar URL (and email, which also
+// requires updating it on the Supabase Auth side — see updateAuthEmail below).
+export const updateOwnProfileFields = async (userId, fields) => {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from('profiles').update(fields).eq('id', userId);
+  return { success: !error, error: error?.message };
+};
+
+// Changing your login email goes through Supabase Auth itself, not the profiles table.
+// Depending on your project's email settings, Supabase may require confirming the new
+// address via a sent link before the change actually takes effect.
+export const updateAuthEmail = async (newEmail) => {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.auth.updateUser({ email: newEmail });
+  if (error) return { success: false, error: mapAuthError(error) };
+  return { success: true };
+};
+
+// Uploads a profile photo to the `avatars` Storage bucket and returns its public URL.
+export const uploadAvatarImage = async (userId, blob, contentType) => {
+  const supabase = getSupabaseClient();
+  const ext = contentType === 'image/png' ? 'png' : 'jpg';
+  const path = `${userId}/avatar.${ext}`;
+  const { error: uploadError } = await supabase.storage.from('avatars').upload(path, blob, {
+    upsert: true,
+    cacheControl: '3600',
+    contentType
+  });
+  if (uploadError) {
+    return { success: false, error: `${uploadError.message} (does the "avatars" Storage bucket exist with the right policies?)` };
+  }
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  // Cache-bust so the new photo shows immediately instead of a stale cached version.
+  return { success: true, url: `${data.publicUrl}?t=${Date.now()}` };
 };
 
 export const updateProfileStatus = async (userId, status) => {
