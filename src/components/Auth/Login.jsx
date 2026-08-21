@@ -261,9 +261,9 @@ export const Login = () => {
               <button type="button" onClick={() => switchMode('signup')}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--amber-primary)', fontWeight: 600, fontSize: 12 }}>
                 Create one
-                <>Powered by</>
-                <>Zeahn's Tech</>
               </button>
+              <>Powered by</>
+              <>Zeahn's Tech</>
             </>
           ) : (
             <>Already have an account?{' '}
