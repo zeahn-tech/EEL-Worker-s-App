@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
-import { ChatProvider } from './context/ChatContext';
+import { ChatProvider, useChat } from './context/ChatContext';
 import { ChatSidebar } from './components/Chat/ChatSidebar';
 import { ChatArea } from './components/Chat/ChatArea';
 import { StaffManager } from './components/Admin/StaffManager';
 import { SystemSettings } from './components/Admin/SystemSettings';
+import { GroupManager } from './components/Admin/GroupManager';
 import { GroupCreator } from './components/Admin/GroupCreator';
 import { Login } from './components/Auth/Login';
 import { ProfileSettings } from './components/Auth/ProfileSettings';
@@ -16,12 +17,16 @@ import {
   ChevronDown,
   X,
   Users,
+  Hash,
   Settings as SettingsIcon,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
   LogOut,
-  UserCog
+  UserCog,
+  ShieldCheck,
+  Cloud,
+  HardDrive
 } from 'lucide-react';
 
 // --- TOP HEADER ---
@@ -194,7 +199,8 @@ const AppHeader = ({ onToggleSidebar, sidebarOpen, onOpenProfile, installPrompt,
 
 // --- ADMIN MODAL ---
 const AdminModal = ({ onClose }) => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, users, supabaseMode } = useAuth();
+  const { groups } = useChat();
   const [adminTab, setAdminTab] = useState('staff');
 
   // Defense in depth: even if something ever renders this modal without going through
@@ -205,37 +211,87 @@ const AdminModal = ({ onClose }) => {
 
   if (!isAdmin) return null;
 
+  const activeCount = users.filter(u => u.status === 'Active').length;
+  const flaggedCount = users.filter(u => u.status !== 'Active').length;
+  const adminCount = users.filter(u => u.role === 'Admin').length;
+
+  const navItems = [
+    { key: 'staff', label: 'Staff', icon: Users },
+    { key: 'groups', label: 'Groups', icon: Hash },
+    { key: 'settings', label: 'Settings & Logo', icon: SettingsIcon }
+  ];
+
   return (
     <div className="modal-overlay animate-fade-in" onClick={onClose}>
       <div className="modal-content amber-border admin-modal-content" onClick={e => e.stopPropagation()}
-        style={{ maxWidth: 880 }}>
+        style={{ maxWidth: 960 }}>
+        {/* Header */}
         <div style={{
-          padding: '12px 16px', background: 'var(--navy-dark)',
+          padding: '14px 18px', background: 'var(--navy-dark)',
           borderBottom: '1px solid var(--border-subtle)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ShieldCheck size={18} color="var(--amber-primary)" />
             <span style={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: 15, color: 'var(--amber-primary)' }}>
-              EEL Admin Portal
+              Admin Dashboard
             </span>
-            <button className={`btn ${adminTab === 'staff' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setAdminTab('staff')}
-              style={{ fontSize: 12, padding: '4px 10px', minHeight: 32 }}>
-              <Users size={13} /> Staff
-            </button>
-            <button className={`btn ${adminTab === 'settings' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setAdminTab('settings')}
-              style={{ fontSize: 12, padding: '4px 10px', minHeight: 32 }}>
-              <SettingsIcon size={13} /> Settings & Logo
-            </button>
+            <span title={supabaseMode ? 'Connected to Supabase' : 'Local / offline mode'} style={{
+              display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700,
+              padding: '3px 8px', borderRadius: 'var(--radius-full)',
+              background: supabaseMode ? 'rgba(16,185,129,0.15)' : 'rgba(148,163,184,0.15)',
+              color: supabaseMode ? '#6EE7B7' : 'var(--text-muted)'
+            }}>
+              {supabaseMode ? <Cloud size={11} /> : <HardDrive size={11} />}
+              {supabaseMode ? 'Supabase' : 'Local'}
+            </span>
           </div>
           <button className="btn btn-secondary btn-icon" onClick={onClose}
             style={{ width: 32, height: 32, minHeight: 32 }}>
             <X size={16} />
           </button>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          {adminTab === 'staff' ? <StaffManager /> : <SystemSettings />}
+
+        {/* Stats overview */}
+        <div style={{ display: 'flex', gap: 10, padding: '14px 18px', flexWrap: 'wrap', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+          <div className="admin-stat-card">
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-main)' }}>{users.length}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total Staff</div>
+          </div>
+          <div className="admin-stat-card">
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#6EE7B7' }}>{activeCount}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Active</div>
+          </div>
+          <div className="admin-stat-card">
+            <div style={{ fontSize: 20, fontWeight: 800, color: flaggedCount ? '#FCA5A5' : 'var(--text-main)' }}>{flaggedCount}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Suspended / Banned</div>
+          </div>
+          <div className="admin-stat-card">
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--amber-primary)' }}>{adminCount}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Admins</div>
+          </div>
+          <div className="admin-stat-card">
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-main)' }}>{groups.length}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Group Channels</div>
+          </div>
+        </div>
+
+        {/* Nav + Content */}
+        <div className="admin-dashboard">
+          <div className="admin-nav">
+            {navItems.map(({ key, label, icon: Icon }) => (
+              <button key={key} className={`admin-nav-item ${adminTab === key ? 'active' : ''}`}
+                onClick={() => setAdminTab(key)}>
+                <Icon size={15} />
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="admin-content">
+            {adminTab === 'staff' && <StaffManager />}
+            {adminTab === 'groups' && <GroupManager />}
+            {adminTab === 'settings' && <SystemSettings />}
+          </div>
         </div>
       </div>
     </div>

@@ -1,15 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { Users, X, CheckSquare, Square, Hash } from 'lucide-react';
 
-export const GroupCreator = ({ isOpen, onClose }) => {
+// Handles both creating a new group channel and editing an existing one — pass
+// `editingGroup` to switch into edit mode (pre-fills the form, submit calls
+// updateGroup instead of createGroup).
+export const GroupCreator = ({ isOpen, onClose, editingGroup }) => {
   const { users, currentUser } = useAuth();
-  const { createGroup } = useChat();
+  const { createGroup, updateGroup } = useChat();
+  const isEditMode = !!editingGroup;
 
   const [groupName, setGroupName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedMembers, setSelectedMembers] = useState([]);
+
+  useEffect(() => {
+    if (editingGroup) {
+      setGroupName(editingGroup.name || '');
+      setDescription(editingGroup.description || '');
+      setSelectedMembers((editingGroup.members || []).filter(id => id !== currentUser?.id));
+    } else {
+      setGroupName('');
+      setDescription('');
+      setSelectedMembers([]);
+    }
+  }, [editingGroup, isOpen]);
 
   if (!isOpen) return null;
 
@@ -25,15 +41,20 @@ export const GroupCreator = ({ isOpen, onClose }) => {
     e.preventDefault();
     if (!groupName.trim()) return;
 
-    createGroup({
-      name: groupName.trim(),
-      description: description.trim(),
-      members: selectedMembers
-    });
+    if (isEditMode) {
+      updateGroup(editingGroup.id, {
+        name: groupName.trim(),
+        description: description.trim(),
+        members: [currentUser.id, ...selectedMembers]
+      });
+    } else {
+      createGroup({
+        name: groupName.trim(),
+        description: description.trim(),
+        members: selectedMembers
+      });
+    }
 
-    setGroupName('');
-    setDescription('');
-    setSelectedMembers([]);
     onClose();
   };
 
@@ -46,7 +67,9 @@ export const GroupCreator = ({ isOpen, onClose }) => {
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Users size={20} color="var(--amber-primary)" />
-            <h3 style={{ fontSize: '18px', fontWeight: 700 }}>Create New Operational Group Channel</h3>
+            <h3 style={{ fontSize: '18px', fontWeight: 700 }}>
+              {isEditMode ? 'Edit Group Channel' : 'Create New Operational Group Channel'}
+            </h3>
           </div>
           <button className="btn btn-secondary btn-icon" onClick={onClose}>
             <X size={18} />
@@ -122,6 +145,7 @@ export const GroupCreator = ({ isOpen, onClose }) => {
                         width: '28px',
                         height: '28px',
                         borderRadius: '50%',
+                        overflow: 'hidden',
                         background: 'var(--bg-tertiary)',
                         color: 'var(--amber-primary)',
                         fontWeight: 700,
@@ -130,7 +154,10 @@ export const GroupCreator = ({ isOpen, onClose }) => {
                         alignItems: 'center',
                         justifyContent: 'center'
                       }}>
-                        {u.initials}
+                        {u.avatar
+                          ? <img src={u.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : u.initials
+                        }
                       </div>
                       <div>
                         <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-main)' }}>{u.name}</div>
@@ -154,7 +181,7 @@ export const GroupCreator = ({ isOpen, onClose }) => {
               Cancel
             </button>
             <button type="submit" className="btn btn-primary" disabled={!groupName.trim()}>
-              Create Channel
+              {isEditMode ? 'Save Changes' : 'Create Channel'}
             </button>
           </div>
         </form>

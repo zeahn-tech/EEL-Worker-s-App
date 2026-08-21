@@ -171,6 +171,28 @@ export const ChatProvider = ({ children }) => {
     return newGroup;
   };
 
+  // Admin Action: Edit an existing group (rename, description, membership)
+  const updateGroup = (groupId, groupData) => {
+    const updated = groups.map(g => g.id === groupId ? {
+      ...g,
+      name: groupData.name ?? g.name,
+      description: groupData.description ?? g.description,
+      members: groupData.members ?? g.members,
+      initials: groupData.name ? groupData.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : g.initials
+    } : g);
+    setGroups(updated);
+    localDb.saveGroups(updated);
+    setActiveChat(prev => (prev?.id === groupId ? updated.find(g => g.id === groupId) : prev));
+  };
+
+  // Admin Action: Delete a group channel
+  const deleteGroup = (groupId) => {
+    const updated = groups.filter(g => g.id !== groupId);
+    setGroups(updated);
+    localDb.saveGroups(updated);
+    setActiveChat(prev => (prev?.id === groupId ? null : prev));
+  };
+
   // Get active chat messages
   const activeMessages = messages.filter(m => {
     if (!activeChat) return false;
@@ -195,7 +217,9 @@ export const ChatProvider = ({ children }) => {
       sendFileMessage,
       sendImageMessage,
       sendLocationMessage,
-      createGroup
+      createGroup,
+      updateGroup,
+      deleteGroup
     }}>
       {children}
     </ChatContext.Provider>
