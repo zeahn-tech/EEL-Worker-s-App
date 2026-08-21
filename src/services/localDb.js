@@ -240,6 +240,21 @@ export const localDb = {
     return newMsg;
   },
 
+  updateMessage: (messageId, updates) => {
+    const messages = localDb.getMessages();
+    let updatedMsg = null;
+    const next = messages.map(m => {
+      if (m.id !== messageId) return m;
+      updatedMsg = { ...m, ...updates };
+      return updatedMsg;
+    });
+    localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(next));
+    if (broadcastChannel && updatedMsg) {
+      broadcastChannel.postMessage({ type: 'MESSAGE_UPDATED', message: updatedMsg });
+    }
+    return updatedMsg;
+  },
+
   getSettings: () => {
     const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (!data) {
@@ -265,7 +280,7 @@ export const localDb = {
 
     const users = localDb.getUsers();
     const user = users.find(u => u.id === session.userId);
-    if (!user || user.status === 'Banned') {
+    if (!user || user.status === 'Banned' || user.status === 'Deleted') {
       localDb.clearSession();
       return null;
     }

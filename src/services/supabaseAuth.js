@@ -85,6 +85,10 @@ export const signInWithPassword = async (email, password) => {
     await supabase.auth.signOut();
     return { success: false, error: 'This account has been banned. Contact an administrator.' };
   }
+  if (profile.status === 'Deleted') {
+    await supabase.auth.signOut();
+    return { success: false, error: 'This account has been deleted.' };
+  }
   return { success: true, user: profile };
 };
 
@@ -100,7 +104,7 @@ export const getRestoredSession = async () => {
   if (!session) return null;
 
   const profile = await fetchProfile(session.user.id);
-  if (!profile || profile.status === 'Banned') {
+  if (!profile || profile.status === 'Banned' || profile.status === 'Deleted') {
     await supabase.auth.signOut();
     return null;
   }
@@ -115,6 +119,22 @@ export const changeOwnPasswordSupabase = async (currentPassword, newPassword, em
 
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) return { success: false, error: mapAuthError(error) };
+  return { success: true };
+};
+
+// Self-service account deletion — soft-delete (status: 'Deleted') rather than a hard
+// row removal, so the login gate can actually keep the account out afterward (see the
+// long comment on this in context/AuthContext.jsx for why). Requires the current
+// password as a confirmation step, same pattern as changing your password.
+export const deleteOwnAccountSupabase = async (currentPassword, email, userId) => {
+  const supabase = getSupabaseClient();
+  const reauth = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+  if (reauth.error) return { success: false, error: 'Current password is incorrect.' };
+
+  const { error } = await supabase.from('profiles').update({ status: 'Deleted' }).eq('id', userId);
+  if (error) return { success: false, error: error.message };
+
+  await supabase.auth.signOut();
   return { success: true };
 };
 

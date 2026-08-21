@@ -54,6 +54,8 @@ export const ChatProvider = ({ children }) => {
           }
           return [...prev, data.message];
         });
+      } else if (data.type === 'MESSAGE_UPDATED') {
+        setMessages(prev => prev.map(m => m.id === data.message.id ? data.message : m));
       } else if (data.type === 'GROUPS_UPDATED') {
         setGroups(data.groups);
       }
@@ -151,6 +153,45 @@ export const ChatProvider = ({ children }) => {
     setMessages(prev => [...prev, saved]);
   };
 
+  // Send a recorded voice note
+  const sendVoiceMessage = (audioData) => {
+    if (!activeChat || !currentUser) return;
+
+    const newMsg = {
+      chatId: activeChat.id,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      content: 'Sent a voice message',
+      type: 'voice',
+      audioData: {
+        audioUrl: audioData.audioUrl, // base64 data URL
+        duration: audioData.duration  // seconds
+      },
+      status: 'sent',
+      timestamp: new Date().toISOString()
+    };
+
+    const saved = localDb.addMessage(newMsg);
+    setMessages(prev => [...prev, saved]);
+  };
+
+  // Edit your own text message
+  const editMessage = (messageId, newContent) => {
+    const target = messages.find(m => m.id === messageId);
+    if (!target || target.senderId !== currentUser?.id || target.deleted) return;
+    const updated = localDb.updateMessage(messageId, { content: newContent, edited: true });
+    if (updated) setMessages(prev => prev.map(m => m.id === messageId ? updated : m));
+  };
+
+  // Delete your own message — soft-delete so the conversation keeps its place
+  // ("This message was deleted"), the same pattern most chat apps use.
+  const deleteMessage = (messageId) => {
+    const target = messages.find(m => m.id === messageId);
+    if (!target || target.senderId !== currentUser?.id) return;
+    const updated = localDb.updateMessage(messageId, { deleted: true, content: '' });
+    if (updated) setMessages(prev => prev.map(m => m.id === messageId ? updated : m));
+  };
+
   // Admin Action: Create New Group Chat Channel
   const createGroup = (groupData) => {
     const newGroup = {
@@ -217,6 +258,9 @@ export const ChatProvider = ({ children }) => {
       sendFileMessage,
       sendImageMessage,
       sendLocationMessage,
+      sendVoiceMessage,
+      editMessage,
+      deleteMessage,
       createGroup,
       updateGroup,
       deleteGroup

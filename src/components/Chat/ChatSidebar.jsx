@@ -18,6 +18,7 @@ export const ChatSidebar = ({ onOpenGroupCreator, onSelectChat, onOpenAdmin, onO
 
   const filteredUsers = users.filter(u =>
     u.id !== currentUser?.id &&
+    u.status !== 'Deleted' &&
     (u.name.toLowerCase().includes((searchQuery || '').toLowerCase()) ||
       u.department.toLowerCase().includes((searchQuery || '').toLowerCase()))
   );

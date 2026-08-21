@@ -282,6 +282,11 @@ h1, h2, h3, h4, h5, .brand-font {
   color: #FCA5A5;
   border: 1px solid rgba(239, 68, 68, 0.4);
 }
+.badge-deleted {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
 
 /* Modal Overlay */
 .modal-overlay {

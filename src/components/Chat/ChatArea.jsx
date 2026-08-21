@@ -1,16 +1,28 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
+import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import { MessageBubble } from './MessageBubble';
 import { FilePickerModal } from './FilePickerModal';
 import { ImagePickerModal } from './ImagePickerModal';
 import { LocationShareModal } from './LocationShareModal';
 import { Lightbox } from '../UI/Lightbox';
-import { Send, Paperclip, Image as ImageIcon, MapPin, Hash, Lock } from 'lucide-react';
+import { Send, Paperclip, Image as ImageIcon, MapPin, Hash, Lock, Mic, Trash2, Send as SendIcon } from 'lucide-react';
+
+const formatDuration = (seconds) => {
+  const s = Math.max(0, Math.round(seconds || 0));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r.toString().padStart(2, '0')}`;
+};
 
 export const ChatArea = () => {
   const { currentUser, isSuspended, isBanned } = useAuth();
-  const { activeChat, messages, sendMessage, sendFileMessage, sendImageMessage, sendLocationMessage } = useChat();
+  const {
+    activeChat, messages, sendMessage, sendFileMessage, sendImageMessage,
+    sendLocationMessage, sendVoiceMessage, editMessage, deleteMessage
+  } = useChat();
+  const { isRecording, elapsedSeconds, error: recordError, startRecording, stopRecording, cancelRecording } = useVoiceRecorder();
 
   const [inputText, setInputText] = useState('');
   const [fileOpen, setFileOpen] = useState(false);
@@ -26,6 +38,16 @@ export const ChatArea = () => {
     if (!inputText.trim() || isSuspended || isBanned) return;
     sendMessage(inputText);
     setInputText('');
+  };
+
+  const handleMicClick = () => {
+    if (isSuspended || isBanned || !activeChat) return;
+    startRecording();
+  };
+
+  const handleStopAndSend = async () => {
+    const result = await stopRecording();
+    if (result) sendVoiceMessage(result);
   };
 
   return (
@@ -77,7 +99,9 @@ export const ChatArea = () => {
         ) : (
           messages.map(m => (
             <MessageBubble key={m.id} message={m} isMe={m.senderId === currentUser?.id}
-              onOpenLightbox={(url, name) => setLightbox({ open: true, url, name })} />
+              onOpenLightbox={(url, name) => setLightbox({ open: true, url, name })}
+              onEdit={editMessage}
+              onDelete={deleteMessage} />
           ))
         )}
         <div ref={endRef} />
@@ -94,6 +118,29 @@ export const ChatArea = () => {
         }}>
           <Lock size={16} />
           {isBanned ? 'Account BANNED. Messaging locked.' : 'Account SUSPENDED. Contact Admin.'}
+        </div>
+      ) : isRecording ? (
+        /* RECORDING IN PROGRESS BAR */
+        <div className="glass-panel" style={{
+          padding: '10px 16px', borderTop: '1px solid var(--border-subtle)',
+          display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0
+        }}>
+          <div style={{
+            width: 10, height: 10, borderRadius: '50%', background: '#EF4444',
+            animation: 'pulseGlow 1s infinite ease-in-out', flexShrink: 0
+          }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)', flexShrink: 0 }}>
+            Recording… {formatDuration(elapsedSeconds)}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-dim)', flex: 1 }}>Max 2 minutes</span>
+          <button onClick={cancelRecording} className="btn btn-secondary btn-icon"
+            title="Cancel recording" style={{ width: 36, height: 36, minHeight: 36, flexShrink: 0 }}>
+            <Trash2 size={16} color="#FCA5A5" />
+          </button>
+          <button onClick={handleStopAndSend} className="btn btn-primary"
+            title="Send voice note" style={{ minHeight: 36, flexShrink: 0 }}>
+            <SendIcon size={15} /> <span className="mobile-hide">Send</span>
+          </button>
         </div>
       ) : (
         <div className="glass-panel" style={{
@@ -113,6 +160,10 @@ export const ChatArea = () => {
             style={{ width: 36, height: 36, minHeight: 36 }} title="Share Location">
             <MapPin size={16} color="var(--amber-primary)" />
           </button>
+          <button className="btn btn-secondary btn-icon" onClick={handleMicClick} disabled={!activeChat}
+            style={{ width: 36, height: 36, minHeight: 36 }} title="Record Voice Note">
+            <Mic size={16} color="var(--amber-primary)" />
+          </button>
 
           {/* Text Input */}
           <form onSubmit={handleSend} style={{ flex: 1, display: 'flex', gap: 6 }}>
@@ -129,6 +180,15 @@ export const ChatArea = () => {
               <span className="mobile-hide">Send</span>
             </button>
           </form>
+        </div>
+      )}
+
+      {recordError && (
+        <div style={{
+          padding: '8px 16px', flexShrink: 0, background: 'rgba(239,68,68,0.15)',
+          borderTop: '1px solid rgba(239,68,68,0.4)', color: '#FCA5A5', fontSize: 12
+        }}>
+          {recordError}
         </div>
       )}
 

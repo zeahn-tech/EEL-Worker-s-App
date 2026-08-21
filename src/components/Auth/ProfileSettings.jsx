@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { resizeImageFile } from '../../services/imageUtils';
-import { X, User, Mail, Lock, Camera, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { X, User, Mail, Lock, Camera, Check, AlertCircle, Loader2, AlertTriangle, Trash2 } from 'lucide-react';
 
 const Field = ({ label, children }) => (
   <div style={{ marginBottom: 16 }}>
@@ -29,7 +29,7 @@ const Alert = ({ type, children }) => {
 };
 
 export const ProfileSettings = ({ onClose }) => {
-  const { currentUser, updateOwnProfile, uploadAvatar, changeOwnPassword, supabaseMode } = useAuth();
+  const { currentUser, updateOwnProfile, uploadAvatar, changeOwnPassword, deleteOwnAccount, supabaseMode } = useAuth();
   const fileInputRef = useRef(null);
 
   const [name, setName] = useState(currentUser?.name || '');
@@ -44,6 +44,12 @@ export const ProfileSettings = ({ onClose }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState(null);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteMsg, setDeleteMsg] = useState(null);
 
   const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0];
@@ -101,6 +107,25 @@ export const ProfileSettings = ({ onClose }) => {
       setNewPassword('');
       setConfirmPassword('');
     }
+  };
+
+  const handleDeleteAccount = async (e) => {
+    e.preventDefault();
+    setDeleteMsg(null);
+    if (deleteConfirmText !== 'DELETE') {
+      setDeleteMsg({ type: 'error', text: 'Type DELETE (all caps) to confirm.' });
+      return;
+    }
+    setDeleting(true);
+    const result = await deleteOwnAccount(deletePassword);
+    setDeleting(false);
+    if (!result.success) {
+      setDeleteMsg({ type: 'error', text: result.error || 'Could not delete account.' });
+      return;
+    }
+    // AuthContext already cleared the session — closing this modal just tidies up the
+    // now-unmounting app shell behind it.
+    onClose();
   };
 
   return (
@@ -217,6 +242,56 @@ export const ProfileSettings = ({ onClose }) => {
               {savingPassword ? 'Updating…' : 'Update Password'}
             </button>
           </form>
+
+          <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '22px 0 18px' }} />
+
+          {/* Danger Zone */}
+          <div style={{
+            border: '1px solid rgba(239,68,68,0.35)', borderRadius: 'var(--radius-md)', padding: 14
+          }}>
+            <h4 style={{ fontSize: 13, fontWeight: 700, color: '#FCA5A5', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <AlertTriangle size={14} /> Danger Zone
+            </h4>
+
+            {!showDeleteConfirm ? (
+              <>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                  Permanently delete your account. You'll be signed out immediately and won't be able to log back in.
+                  Message history you've already sent stays visible to others.
+                </p>
+                <button type="button" className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}
+                  style={{ width: '100%', minHeight: 36, fontSize: 13 }}>
+                  <Trash2 size={14} /> Delete My Account
+                </button>
+              </>
+            ) : (
+              <form onSubmit={handleDeleteAccount}>
+                {deleteMsg && <Alert type={deleteMsg.type}>{deleteMsg.text}</Alert>}
+                <Field label={`Type DELETE to confirm`}>
+                  <input type="text" className="input-field"
+                    value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)}
+                    placeholder="DELETE" autoComplete="off" />
+                </Field>
+                <Field label="Current Password">
+                  <div style={{ position: 'relative' }}>
+                    <Lock size={15} color="var(--text-dim)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+                    <input type="password" className="input-field" style={{ paddingLeft: 36 }}
+                      autoComplete="current-password"
+                      value={deletePassword} onChange={e => setDeletePassword(e.target.value)} required />
+                  </div>
+                </Field>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" className="btn btn-secondary" style={{ flex: 1, minHeight: 36 }}
+                    onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); setDeletePassword(''); setDeleteMsg(null); }}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-danger" disabled={deleting} style={{ flex: 1, minHeight: 36 }}>
+                    {deleting ? 'Deleting…' : 'Permanently Delete'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     </div>

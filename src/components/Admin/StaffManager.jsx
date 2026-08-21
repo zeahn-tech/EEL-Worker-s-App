@@ -130,7 +130,7 @@ export const StaffManager = () => {
           <div key={u.id} className="glass-panel" style={{
             padding: '16px',
             borderRadius: 'var(--radius-md)',
-            border: u.status === 'Banned' ? '1px solid #EF4444' : u.status === 'Suspended' ? '1px solid #F59E0B' : '1px solid var(--border-subtle)',
+            border: u.status === 'Banned' ? '1px solid #EF4444' : u.status === 'Suspended' ? '1px solid #F59E0B' : u.status === 'Deleted' ? '1px solid var(--border-subtle)' : '1px solid var(--border-subtle)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between'
@@ -142,7 +142,7 @@ export const StaffManager = () => {
                     width: '40px',
                     height: '40px',
                     borderRadius: '50%',
-                    background: u.status === 'Banned' ? '#EF4444' : u.status === 'Suspended' ? '#F59E0B' : 'var(--amber-primary)',
+                    background: u.status === 'Banned' ? '#EF4444' : u.status === 'Suspended' ? '#F59E0B' : u.status === 'Deleted' ? 'var(--text-dim)' : 'var(--amber-primary)',
                     color: u.status !== 'Active' ? 'white' : 'var(--navy-dark)',
                     fontWeight: 700,
                     fontSize: '15px',
@@ -194,68 +194,92 @@ export const StaffManager = () => {
                 justifyContent: 'space-between',
                 gap: '8px' 
               }}>
-                {/* Suspend / Unsuspend */}
-                {u.status === 'Suspended' ? (
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={() => handleUpdateStatus(u.id, 'Active')}
-                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                  >
-                    <UserCheck size={14} color="#10B981" />
-                    <span>Unsuspend</span>
-                  </button>
+                {u.status === 'Deleted' ? (
+                  <>
+                    {/* Self-deleted accounts: just Restore or purge permanently */}
+                    <button 
+                      className="btn btn-secondary"
+                      onClick={() => handleUpdateStatus(u.id, 'Active')}
+                      style={{ fontSize: '11px', padding: '4px 8px' }}
+                    >
+                      <UserCheck size={14} color="#10B981" />
+                      <span>Restore Account</span>
+                    </button>
+                    <button 
+                      className="btn btn-secondary btn-icon"
+                      onClick={() => handleDelete(u)}
+                      title="Delete Worker Permanently"
+                      style={{ width: '28px', height: '28px', color: '#EF4444' }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </>
                 ) : (
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={() => handleUpdateStatus(u.id, 'Suspended')}
-                    style={{ fontSize: '11px', padding: '4px 8px', color: '#F59E0B' }}
-                  >
-                    <ShieldAlert size={14} />
-                    <span>Suspend</span>
-                  </button>
+                  <>
+                    {/* Suspend / Unsuspend */}
+                    {u.status === 'Suspended' ? (
+                      <button 
+                        className="btn btn-secondary"
+                        onClick={() => handleUpdateStatus(u.id, 'Active')}
+                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                      >
+                        <UserCheck size={14} color="#10B981" />
+                        <span>Unsuspend</span>
+                      </button>
+                    ) : (
+                      <button 
+                        className="btn btn-secondary"
+                        onClick={() => handleUpdateStatus(u.id, 'Suspended')}
+                        style={{ fontSize: '11px', padding: '4px 8px', color: '#F59E0B' }}
+                      >
+                        <ShieldAlert size={14} />
+                        <span>Suspend</span>
+                      </button>
+                    )}
+
+                    {/* Ban / Unban */}
+                    {u.status === 'Banned' ? (
+                      <button 
+                        className="btn btn-secondary"
+                        onClick={() => handleUpdateStatus(u.id, 'Active')}
+                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                      >
+                        <UserCheck size={14} color="#10B981" />
+                        <span>Unban</span>
+                      </button>
+                    ) : (
+                      <button 
+                        className="btn btn-danger"
+                        onClick={() => handleUpdateStatus(u.id, 'Banned')}
+                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                      >
+                        <Ban size={14} />
+                        <span>Ban Worker</span>
+                      </button>
+                    )}
+
+                    {/* Reset Password */}
+                    <button 
+                      className="btn btn-secondary"
+                      onClick={() => handleResetPassword(u)}
+                      style={{ fontSize: '11px', padding: '4px 8px' }}
+                      title="Issue a new temporary password"
+                    >
+                      <KeyRound size={14} color="var(--amber-primary)" />
+                      <span className="mobile-hide">Reset Password</span>
+                    </button>
+
+                    {/* Delete Worker */}
+                    <button 
+                      className="btn btn-secondary btn-icon"
+                      onClick={() => handleDelete(u)}
+                      title="Delete Worker Permanently"
+                      style={{ width: '28px', height: '28px', color: '#EF4444' }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </>
                 )}
-
-                {/* Ban / Unban */}
-                {u.status === 'Banned' ? (
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={() => handleUpdateStatus(u.id, 'Active')}
-                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                  >
-                    <UserCheck size={14} color="#10B981" />
-                    <span>Unban</span>
-                  </button>
-                ) : (
-                  <button 
-                    className="btn btn-danger"
-                    onClick={() => handleUpdateStatus(u.id, 'Banned')}
-                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                  >
-                    <Ban size={14} />
-                    <span>Ban Worker</span>
-                  </button>
-                )}
-
-                {/* Reset Password */}
-                <button 
-                  className="btn btn-secondary"
-                  onClick={() => handleResetPassword(u)}
-                  style={{ fontSize: '11px', padding: '4px 8px' }}
-                  title="Issue a new temporary password"
-                >
-                  <KeyRound size={14} color="var(--amber-primary)" />
-                  <span className="mobile-hide">Reset Password</span>
-                </button>
-
-                {/* Delete Worker */}
-                <button 
-                  className="btn btn-secondary btn-icon"
-                  onClick={() => handleDelete(u)}
-                  title="Delete Worker Permanently"
-                  style={{ width: '28px', height: '28px', color: '#EF4444' }}
-                >
-                  <Trash2 size={14} />
-                </button>
               </div>
             )}
           </div>

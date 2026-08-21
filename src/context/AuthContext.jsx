@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }) => {
           setCurrentUser(prev => {
             if (!prev) return prev;
             const updated = updatedProfiles.find(u => u.id === prev.id);
-            if (!updated || updated.status === 'Banned') return null;
+            if (!updated || updated.status === 'Banned' || updated.status === 'Deleted') return null;
             return updated;
           });
         });
@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }) => {
               if (!prev) return prev;
               const updated = data.users.find(u => u.id === prev.id);
               if (!updated) return prev;
-              if (updated.status === 'Banned') {
+              if (updated.status === 'Banned' || updated.status === 'Deleted') {
                 localDb.clearSession();
                 return null;
               }
@@ -127,6 +127,9 @@ export const AuthProvider = ({ children }) => {
     if (!user) return fail('Incorrect email or password.');
     if (user.status === 'Banned') {
       return { success: false, error: 'This account has been banned. Contact an administrator.' };
+    }
+    if (user.status === 'Deleted') {
+      return { success: false, error: 'This account has been deleted.' };
     }
 
     const valid = await verifyPassword(password, user.id, user.passwordHash);
@@ -239,6 +242,33 @@ export const AuthProvider = ({ children }) => {
 
     // Local mode: store the resized image directly as a data URL.
     return updateOwnProfile({ name: currentUser.name, email: currentUser.email, avatar: dataUrl });
+  };
+
+  // Self-service: permanently step away from the app. This is a soft-delete (marks the
+  // account status as 'Deleted' and signs out) rather than an unrecoverable row wipe —
+  // that's what makes the login gate actually block the account afterward (a truly
+  // removed profile row would just get silently recreated by the self-heal logic in
+  // supabaseAuth.js the next time they logged in with the same credentials). Message
+  // history is left intact so conversations don't develop holes for other people.
+  const deleteOwnAccount = async (currentPassword) => {
+    if (!currentUser) return { success: false, error: 'Not signed in.' };
+
+    if (supabaseMode) {
+      const result = await supaAuth.deleteOwnAccountSupabase(currentPassword, currentUser.email, currentUser.id);
+      if (!result.success) return result;
+      setCurrentUser(null);
+      return { success: true };
+    }
+
+    const valid = await verifyPassword(currentPassword, currentUser.id, currentUser.passwordHash);
+    if (!valid) return { success: false, error: 'Current password is incorrect.' };
+
+    const updatedUsers = users.map(u => u.id === currentUser.id ? { ...u, status: 'Deleted' } : u);
+    setUsers(updatedUsers);
+    localDb.saveUsers(updatedUsers);
+    localDb.clearSession();
+    setCurrentUser(null);
+    return { success: true };
   };
 
   const logout = async () => {
@@ -379,6 +409,7 @@ export const AuthProvider = ({ children }) => {
       changeOwnPassword,
       updateOwnProfile,
       uploadAvatar,
+      deleteOwnAccount,
       resetWorkerPassword,
       addWorker,
       updateWorkerStatus,
