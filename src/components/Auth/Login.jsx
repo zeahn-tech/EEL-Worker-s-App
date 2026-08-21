@@ -262,8 +262,6 @@ export const Login = () => {
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--amber-primary)', fontWeight: 600, fontSize: 12 }}>
                 Create one
               </button>
-              <>Powered by</>
-              <>Zeahn's Tech</>
             </>
           ) : (
             <>Already have an account?{' '}
