@@ -102,4 +102,11 @@ export const isSupabaseConfigured = () => {
  *   avatar TEXT,
  *   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
  * );
+ *
+ * IMPORTANT: creating these tables is not enough on its own — Row Level Security
+ * blocks all access by default until matching policies exist. Run
+ * /supabase/profiles-rls-policies.sql (in this repo) in your Supabase SQL Editor
+ * to add the required policies for sign-up, login, self-service profile edits,
+ * and admin staff management. Without it you'll see errors like "permission
+ * denied for table profiles" and "No staff profile found for this account."
  */

@@ -56,7 +56,27 @@ export const signInWithPassword = async (email, password) => {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { success: false, error: mapAuthError(error) };
 
-  const profile = await fetchProfile(data.user.id);
+  let profile = await fetchProfile(data.user.id);
+
+  // Self-heal: if auth succeeded but no profile row exists, this is almost always an
+  // account whose profile insert failed at sign-up time (e.g. before the required RLS
+  // policy existed) — not a real "banned" or "wrong account" situation. Since we're now
+  // authenticated as this exact user, auth.uid() = id, so the self-insert policy applies
+  // and we can safely create the missing row instead of permanently locking them out.
+  if (!profile) {
+    const fallbackName = data.user.email.split('@')[0];
+    const { error: healError } = await supabase.from('profiles').upsert({
+      id: data.user.id,
+      name: fallbackName,
+      email: data.user.email,
+      role: 'Worker',
+      department: '',
+      status: 'Active',
+      phone: ''
+    });
+    if (!healError) profile = await fetchProfile(data.user.id);
+  }
+
   if (!profile) {
     await supabase.auth.signOut();
     return { success: false, error: 'No staff profile found for this account. Contact an administrator.' };
