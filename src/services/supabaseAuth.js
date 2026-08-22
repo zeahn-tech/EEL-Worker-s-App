@@ -51,31 +51,40 @@ export const fetchAllProfiles = async () => {
   return data.map(toAppUser);
 };
 
-export const signInWithPassword = async (email, password) => {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { success: false, error: mapAuthError(error) };
-
-  let profile = await fetchProfile(data.user.id);
-
-  // Self-heal: if auth succeeded but no profile row exists, this is almost always an
-  // account whose profile insert failed at sign-up time (e.g. before the required RLS
-  // policy existed) — not a real "banned" or "wrong account" situation. Since we're now
-  // authenticated as this exact user, auth.uid() = id, so the self-insert policy applies
-  // and we can safely create the missing row instead of permanently locking them out.
+// Self-heal: if we have an authenticated user but no profiles row exists for them, this
+// is almost always someone whose row could never be written at sign-up time — either the
+// RLS policy wasn't in place yet, or (the common case) the Supabase project requires email
+// confirmation, so signUp() ran with no session and the self-insert policy had nothing to
+// authenticate as. Since we're now genuinely authenticated as this exact user, auth.uid() =
+// id, so the self-insert policy applies and we can safely create the missing row instead of
+// permanently locking them out. Their originally-typed name survives this gap because
+// signUpNewAccount stores it in the auth user's metadata, not just in the (possibly-never-
+// written) profiles row.
+const ensureProfile = async (user) => {
+  let profile = await fetchProfile(user.id);
   if (!profile) {
-    const fallbackName = data.user.email.split('@')[0];
+    const supabase = getSupabaseClient();
+    const fallbackName = user.user_metadata?.name || user.email.split('@')[0];
     const { error: healError } = await supabase.from('profiles').upsert({
-      id: data.user.id,
+      id: user.id,
       name: fallbackName,
-      email: data.user.email,
+      email: user.email,
       role: 'Worker',
       department: '',
       status: 'Active',
       phone: ''
     });
-    if (!healError) profile = await fetchProfile(data.user.id);
+    if (!healError) profile = await fetchProfile(user.id);
   }
+  return profile;
+};
+
+export const signInWithPassword = async (email, password) => {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { success: false, error: mapAuthError(error) };
+
+  const profile = await ensureProfile(data.user);
 
   if (!profile) {
     await supabase.auth.signOut();
@@ -103,7 +112,13 @@ export const getRestoredSession = async () => {
   const session = data?.session;
   if (!session) return null;
 
-  const profile = await fetchProfile(session.user.id);
+  // Same self-heal as signInWithPassword. This path matters more than it looks: when a
+  // project requires email confirmation, clicking the confirmation link redirects back
+  // into the app with an access token in the URL, and supabase-js auto-establishes a
+  // session from it (detectSessionInUrl) *before* the person ever hits the login form.
+  // Without self-healing here too, that first post-confirmation load would find no
+  // profile row and silently sign them back out, discarding the account.
+  const profile = await ensureProfile(session.user);
   if (!profile || profile.status === 'Banned' || profile.status === 'Deleted') {
     await supabase.auth.signOut();
     return null;
@@ -154,7 +169,7 @@ export const sendPasswordResetEmail = async (email) => {
 // Supabase client so this signUp() call can never overwrite the admin's own session.
 export const createWorkerAccount = async ({ name, email, password, role, department, phone }) => {
   const actionClient = getAdminActionClient();
-  const { data, error } = await actionClient.auth.signUp({ email, password });
+  const { data, error } = await actionClient.auth.signUp({ email, password, options: { data: { name } } });
   if (error) return { success: false, error: mapAuthError(error) };
   if (!data.user) {
     return { success: false, error: 'Could not create account — check if email confirmation is required in your Supabase project settings.' };
@@ -183,32 +198,40 @@ export const createWorkerAccount = async ({ name, email, password, role, departm
 // upgrades stay an explicit Admin action in Staff Manager.
 export const signUpNewAccount = async ({ name, email, password }) => {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  // Storing `name` in auth user_metadata (not just the profiles table) means it survives
+  // even when the profiles insert below can't run yet — see the email-confirmation case.
+  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
   if (error) return { success: false, error: mapAuthError(error) };
   if (!data.user) {
     return { success: false, error: 'Could not create account — please try again.' };
   }
 
-  const { error: profileError } = await supabase.from('profiles').upsert({
-    id: data.user.id,
-    name,
-    email,
-    role: 'Worker',
-    department: '',
-    status: 'Active',
-    phone: ''
-  });
-  if (profileError) {
-    return { success: false, error: `Account created, but profile setup failed: ${profileError.message}` };
-  }
-
-  // If your Supabase project requires email confirmation, there's no session yet —
-  // the person needs to click the link in their inbox before they can sign in.
+  // If your Supabase project requires email confirmation (the default for new projects),
+  // there is no session yet at this point — signUp() only creates the auth.users row and
+  // sends a confirmation email. Attempting the profiles insert here would run as an
+  // unauthenticated request and get blocked by RLS, so we skip it entirely: the row gets
+  // created automatically (via ensureProfile's self-heal) the moment this person actually
+  // has a session, whether that's clicking the confirmation link or logging in afterward.
   const needsEmailConfirmation = !data.session;
   if (needsEmailConfirmation) return { success: true, needsEmailConfirmation: true };
 
-  const profile = await fetchProfile(data.user.id);
+  const profile = await ensureProfile(data.user);
   return { success: true, needsEmailConfirmation: false, user: profile };
+};
+
+// Bootstrap action: let the current account become the very first Admin when literally
+// no Admin exists yet in this Supabase project. Necessary because self-signup always
+// creates 'Worker' accounts (by design — see signUpNewAccount) and there is otherwise no
+// way for a fresh Supabase-backed deployment to ever get its first Admin: an Admin action
+// is normally required to promote someone, but there's no Admin yet to take it. The RLS
+// policy on profiles enforces the "no Admin exists yet" condition server-side too — this
+// isn't just a client-side check — so this call fails safely once any Admin exists.
+export const claimFirstAdmin = async (userId) => {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from('profiles').update({ role: 'Admin' }).eq('id', userId);
+  if (error) return { success: false, error: error.message };
+  const profile = await fetchProfile(userId);
+  return { success: true, user: profile };
 };
 
 // Self-service: update your own display name / avatar URL (and email, which also

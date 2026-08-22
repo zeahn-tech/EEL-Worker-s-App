@@ -389,6 +389,26 @@ export const AuthProvider = ({ children }) => {
     localDb.saveSettings(merged);
   };
 
+  // Bootstrap: claim Admin access when no Admin exists anywhere in the system yet. Local
+  // mode always ships a seeded Admin account, so this branch is effectively Supabase-only
+  // in practice — it's what gets a brand-new Supabase-backed deployment its first Admin.
+  const claimAdminAccess = async () => {
+    if (!currentUser) return { success: false, error: 'Not signed in.' };
+    if (currentUser.role === 'Admin') return { success: true };
+    if (users.some(u => u.role === 'Admin')) {
+      return { success: false, error: 'An admin already exists for this workspace. Ask them for access.' };
+    }
+    if (!supabaseMode) {
+      return { success: false, error: 'Local mode already has a built-in admin account.' };
+    }
+    const result = await supaAuth.claimFirstAdmin(currentUser.id);
+    if (result.success) {
+      setCurrentUser(result.user);
+      supaAuth.fetchAllProfiles().then(setUsers);
+    }
+    return result;
+  };
+
   const isAdmin = currentUser?.role === 'Admin';
   const isSuspended = currentUser?.status === 'Suspended';
   const isBanned = currentUser?.status === 'Banned';
@@ -414,7 +434,8 @@ export const AuthProvider = ({ children }) => {
       addWorker,
       updateWorkerStatus,
       deleteWorker,
-      updateSettings
+      updateSettings,
+      claimAdminAccess
     }}>
       {children}
     </AuthContext.Provider>

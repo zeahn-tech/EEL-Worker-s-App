@@ -1,11 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
-import { Search, Plus, Hash, User, Settings } from 'lucide-react';
+import { Search, Plus, Hash, User, Settings, ShieldAlert } from 'lucide-react';
 
 export const ChatSidebar = ({ onOpenGroupCreator, onSelectChat, onOpenAdmin, onOpenProfile }) => {
-  const { users, currentUser, isAdmin } = useAuth();
+  const { users, currentUser, isAdmin, claimAdminAccess } = useAuth();
   const { groups, activeChat, setActiveChat, searchQuery, setSearchQuery } = useChat();
+  const [claiming, setClaiming] = useState(false);
+
+  // No Admin exists anywhere yet — this is the bootstrap gap on a fresh Supabase-backed
+  // deployment (local mode always ships a seeded Admin, so this is never true there).
+  const noAdminExists = !isAdmin && users.length > 0 && !users.some(u => u.role === 'Admin');
+
+  const handleClaimAdmin = async () => {
+    if (!window.confirm('No admin exists yet for this workspace. Make your own account the Admin now? This gives you full Staff Manager, Groups, and Settings access.')) return;
+    setClaiming(true);
+    const result = await claimAdminAccess();
+    setClaiming(false);
+    if (!result.success) window.alert(result.error || 'Could not claim admin access.');
+  };
 
   const handleSelect = (item) => {
     setActiveChat(item);
@@ -177,6 +190,19 @@ export const ChatSidebar = ({ onOpenGroupCreator, onSelectChat, onOpenAdmin, onO
             style={{ flexShrink: 0, color: 'var(--amber-primary)' }}
           >
             <Settings size={17} />
+          </button>
+        )}
+
+        {noAdminExists && (
+          <button
+            onClick={handleClaimAdmin}
+            disabled={claiming}
+            title="No admin exists yet — claim Admin access"
+            className="btn btn-primary"
+            style={{ flexShrink: 0, fontSize: 11, padding: '6px 10px', minHeight: 30, whiteSpace: 'nowrap' }}
+          >
+            <ShieldAlert size={14} />
+            {claiming ? 'Claiming…' : 'Claim Admin'}
           </button>
         )}
       </div>
