@@ -40,6 +40,7 @@ const toAppUser = (profile) => ({
 export const fetchProfile = async (userId) => {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+  if (error) console.error('[supabaseAuth] fetchProfile failed:', error.message);
   if (error || !data) return null;
   return toAppUser(data);
 };
@@ -47,6 +48,7 @@ export const fetchProfile = async (userId) => {
 export const fetchAllProfiles = async () => {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.from('profiles').select('*').order('name');
+  if (error) console.error('[supabaseAuth] fetchAllProfiles failed:', error.message);
   if (error || !data) return [];
   return data.map(toAppUser);
 };
@@ -229,7 +231,10 @@ export const signUpNewAccount = async ({ name, email, password }) => {
 export const claimFirstAdmin = async (userId) => {
   const supabase = getSupabaseClient();
   const { error } = await supabase.from('profiles').update({ role: 'Admin' }).eq('id', userId);
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    console.error('[supabaseAuth] claimFirstAdmin failed:', error.message);
+    return { success: false, error: error.message };
+  }
   const profile = await fetchProfile(userId);
   return { success: true, user: profile };
 };

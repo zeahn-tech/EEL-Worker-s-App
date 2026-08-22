@@ -409,6 +409,21 @@ export const AuthProvider = ({ children }) => {
     return result;
   };
 
+  // Manual re-fetch of the staff directory. Exposed so the UI can offer a "Retry" action
+  // if the directory ever comes back empty — fetchAllProfiles swallows its own errors
+  // (logging them to the console) and returns [] rather than throwing, so a permission
+  // or connection problem otherwise has no visible symptom besides an empty list.
+  const refreshUsers = async () => {
+    if (supabaseMode) {
+      const refreshed = await supaAuth.fetchAllProfiles();
+      setUsers(refreshed);
+      return refreshed;
+    }
+    const refreshed = localDb.getUsers();
+    setUsers(refreshed);
+    return refreshed;
+  };
+
   const isAdmin = currentUser?.role === 'Admin';
   const isSuspended = currentUser?.status === 'Suspended';
   const isBanned = currentUser?.status === 'Banned';
@@ -435,7 +450,8 @@ export const AuthProvider = ({ children }) => {
       updateWorkerStatus,
       deleteWorker,
       updateSettings,
-      claimAdminAccess
+      claimAdminAccess,
+      refreshUsers
     }}>
       {children}
     </AuthContext.Provider>
